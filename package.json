@@ -1,0 +1,27 @@
+{
+  "name": "suiji-go",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Suiji • Go Institute × AI Analysis & Interactive Learning Dojo",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  },
+  "keywords": [
+    "go",
+    "baduk",
+    "weiqi",
+    "ai",
+    "interactive-learning",
+    "tsumego",
+    "tutorial",
+    "canvas"
+  ],
+  "author": "Avi",
+  "license": "MIT"
+}

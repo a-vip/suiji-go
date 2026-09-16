@@ -1,0 +1,17 @@
+{
+  "name": "Suiji • Go Institute",
+  "short_name": "Suiji",
+  "description": "Go Institute × AI Analysis & Interactive Learning Dojo",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f1e7cd",
+  "theme_color": "#1f1410",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suiji • Go Institute × AI Analysis & Learning Dojo</title>
+  
+  <!-- Web App Manifest for PWA / Mobile installation -->
+  <link rel="manifest" href="./public/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="./public/favicon.svg">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Spline+Sans:wght@300;400;500;600;700&family=Noto+Serif+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="./src/styles/main.css">
+  <link rel="stylesheet" href="./src/styles/learning.css">
+</head>
+<body>
+
+<div class="app">
+  
+  <!-- HEADER -->
+  <header class="header">
+    <div class="brand">
+      <div class="seal">囲</div>
+      <div>
+        <h1>Suiji</h1>
+        <div class="tagline">Go Institute<span class="dot">·</span>AI Analysis<span class="dot">·</span>Learning Dojo</div>
+      </div>
+    </div>
+    
+    <div class="header-actions">
+      <!-- Board Size Selector -->
+      <div class="size-selector" id="sizeSelector" title="Select Board Dimensions">
+        <button class="size-btn active" data-size="9">9×9</button>
+        <button class="size-btn" data-size="13">13×13</button>
+        <button class="size-btn" data-size="19">19×19</button>
+      </div>
+
+      <!-- Rank Selector -->
+      <div class="rank-selector" id="rankSelector">
+        <div class="rank-badge" data-level="1" title="Beginner AI: forgiving, instructional">
+          <div class="medal">初</div>
+          <div class="label">
+            <span class="name">Beginner Dan</span>
+            <span class="meta">Kyu-level</span>
+          </div>
+        </div>
+        <div class="rank-badge active" data-level="2" title="Mid Dan AI: club tournament strength">
+          <div class="medal">中</div>
+          <div class="label">
+            <span class="name">Mid Dan</span>
+            <span class="meta">Club strength</span>
+          </div>
+        </div>
+        <div class="rank-badge" data-level="3" title="High Dan AI: pro-grade reading & tactical search">
+          <div class="medal">高</div>
+          <div class="label">
+            <span class="name">High Dan</span>
+            <span class="meta">Pro grade</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Learning Dojo Academy Button -->
+      <button class="dojo-launch-btn" id="btnLaunchDojo" title="Enter the Interactive Academy & Tactics Dojo">
+        <i class="fa-solid fa-graduation-cap"></i>
+        <span>Learning Dojo • 囲碁道場</span>
+      </button>
+    </div>
+  </header>
+  
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+    
+    <!-- LEFT PANEL -->
+    <aside class="left-col">
+      <div class="panel">
+        <h3 class="panel-title">Game Information</h3>
+        <div class="info-row">
+          <span class="label">Board Size</span>
+          <span class="value mono" id="infoBoardSize">9 × 9</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Komi</span>
+          <span class="value mono" id="infoKomi">6.5</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Ruleset</span>
+          <span class="value">Area Scoring</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Moves</span>
+          <span class="value mono" id="moveCounter">0</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Time</span>
+          <span class="value mono" id="gameTime">00:00</span>
+        </div>
+        
+        <div style="margin-top: 14px; display: flex; gap: 6px;">
+          <button class="btn" id="btnUndo" style="flex: 1;" title="Undo Move">
+            <i class="fa-solid fa-arrow-rotate-left"></i> Undo
+          </button>
+          <button class="btn" id="btnExportSgf" style="flex: 1;" title="Export game as SGF">
+            <i class="fa-solid fa-download"></i> SGF
+          </button>
+        </div>
+      </div>
+      
+      <div class="panel">
+        <h3 class="panel-title">Move Record</h3>
+        <div class="move-list" id="moveList">
+          <div class="move-empty">The board awaits the first stone.</div>
+        </div>
+      </div>
+    </aside>
+    
+    <!-- CENTER: BOARD -->
+    <section class="board-section">
+      <div class="board-wrap">
+        <div class="board-status">
+          <div class="player-tags">
+            <div class="player-tag active" id="playerBlack">
+              <div class="stone-icon black"></div>
+              <span class="role">You (Black)</span>
+              <span class="captures" id="capturesBlack">0</span>
+            </div>
+            <div class="player-tag" id="playerWhite">
+              <div class="stone-icon white"></div>
+              <span class="role">Suiji AI (White)</span>
+              <span class="captures" id="capturesWhite">0</span>
+            </div>
+          </div>
+          <div class="board-controls">
+            <button class="btn" id="btnPass" title="Pass turn">
+              <i class="fa-solid fa-forward"></i> Pass
+            </button>
+            <button class="btn" id="btnResign" title="Resign">
+              <i class="fa-solid fa-flag"></i> Resign
+            </button>
+            <button class="btn primary" id="btnNew" title="New game">
+              <i class="fa-solid fa-rotate"></i> New
+            </button>
+          </div>
+        </div>
+        
+        <div class="canvas-wrap">
+          <canvas id="board"></canvas>
+          <div class="coord-hint" id="coordHint"></div>
+          
+          <!-- Thinking Overlay -->
+          <div class="thinking-overlay" id="thinkingOverlay">
+            <div class="thinking-content">
+              <div class="thinking-spinner">
+                <div class="orbit-stone black" style="animation-delay: 0s"></div>
+                <div class="orbit-stone white" style="animation-delay: -0.4s"></div>
+                <div class="orbit-stone black" style="animation-delay: -0.8s"></div>
+                <div class="orbit-stone white" style="animation-delay: -1.2s"></div>
+              </div>
+              <div class="thinking-text">Thinking…</div>
+              <div class="thinking-sub" id="thinkingSub">Reading variations</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- RIGHT PANEL -->
+    <aside class="right-col">
+      <div class="panel">
+        <h3 class="panel-title">
+          Territory Estimate
+          <span class="panel-sub live">Live</span>
+        </h3>
+        <div class="heatmap-wrap">
+          <canvas id="heatmap" width="240" height="240"></canvas>
+        </div>
+        <div class="heatmap-legend">
+          <div class="leg"><span class="swatch b"></span>Black</div>
+          <div class="leg">Neutral</div>
+          <div class="leg">White<span class="swatch w"></span></div>
+        </div>
+        <div class="score-section">
+          <div class="score-bar">
+            <div class="black-fill" id="blackBar" style="width: 50%"></div>
+            <div class="white-fill" id="whiteBar" style="width: 50%"></div>
+          </div>
+          <div class="score-labels">
+            <div class="label-side">
+              <div class="stone-mini b"></div>
+              <span>Black</span>
+              <span class="value" id="blackScore">0</span>
+            </div>
+            <div class="label-side">
+              <span class="value" id="whiteScore">6.5</span>
+              <span>White</span>
+              <div class="stone-mini w"></div>
+            </div>
+          </div>
+          <div class="score-margin" id="scoreMargin">Even position</div>
+        </div>
+      </div>
+      
+      <div class="panel">
+        <h3 class="panel-title">
+          AI Intent & Strategy
+          <span class="panel-sub" id="intentMove">Move 0</span>
+        </h3>
+        <div class="intent-panel">
+          <div class="intent-label" id="intentLabel">Tactical Interpretation</div>
+          <div class="intent-text" id="intentText">Black plays first — the board begins empty.</div>
+          <div class="intent-meta" id="intentMeta">
+            <span>Awaiting opening</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- Replay scrubber bar -->
+<div class="replay-bar" id="replayBar">
+  <div class="replay-content">
+    <div class="replay-title">
+      Post-Game Review
+      <span class="sub">Annotated by Suiji AI</span>
+    </div>
+    <div class="replay-controls">
+      <button class="btn" id="replayPrev" title="Previous move"><i class="fa-solid fa-backward-step"></i></button>
+      <button class="btn primary" id="replayPlay" title="Auto Play"><i class="fa-solid fa-play"></i></button>
+      <button class="btn" id="replayNext" title="Next move"><i class="fa-solid fa-forward-step"></i></button>
+    </div>
+    <div class="replay-slider-wrap">
+      <input type="range" class="replay-slider" id="replaySlider" min="0" max="0" value="0">
+    </div>
+    <div class="move-info" id="replayInfo">
+      <span class="move-num" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">Move 0 / 0</span>
+      <span class="reason" id="replayReason" style="display: block; font-family: 'Cormorant Garamond', serif; font-size: 13px; color: var(--accent); font-style: italic;"></span>
+    </div>
+    <button class="btn" id="replayClose"><i class="fa-solid fa-xmark"></i> Close</button>
+  </div>
+</div>
+
+<!-- Game Over card -->
+<div class="game-over-card" id="gameOverCard">
+  <div class="game-over-inner">
+    <div class="game-over-sub" id="goSub">Match Concluded</div>
+    <h2 class="game-over-title" id="goTitle">Black Wins</h2>
+    <div class="game-over-score" id="goScore">
+      <span>Black <strong id="goBlack">0</strong></span>
+      <span class="vs" style="font-style: italic; color: var(--ink-light);">vs</span>
+      <span><strong id="goWhite">0</strong> White</span>
+    </div>
+    <div style="display: flex; gap: 10px; justify-content: center;">
+      <button class="btn" id="goReview"><i class="fa-solid fa-list"></i> Review Moves</button>
+      <button class="btn primary" id="goNew"><i class="fa-solid fa-rotate"></i> New Game</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notifications -->
+<div class="toast" id="toast"></div>
+
+<!-- Application Main Controller -->
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
