@@ -10,6 +10,7 @@ import { LearningUI } from './learning/LearningUI.js';
 
 class SuijiApp {
   constructor() {
+    this.currentMode = 'match'; // 'match', 'dojo', 'puzzles', 'codex'
     this.game = new GoGame(9, 6.5);
     this.sound = new SoundEngine();
     this.ai = new GoAI(this.game, 2);
@@ -18,7 +19,6 @@ class SuijiApp {
     this.reviewMode = false;
     this.reviewIndex = 0;
     this.reviewInterval = null;
-    this.inDojoMode = false;
 
     this.initDOM();
     this.initRenderers();
@@ -30,6 +30,7 @@ class SuijiApp {
 
   initDOM() {
     this.els = {
+      body: document.body,
       board: document.getElementById('board'),
       heatmap: document.getElementById('heatmap'),
       coordHint: document.getElementById('coordHint'),
@@ -57,8 +58,14 @@ class SuijiApp {
       btnResign: document.getElementById('btnResign'),
       btnNew: document.getElementById('btnNew'),
       btnUndo: document.getElementById('btnUndo'),
+      btnSoundToggle: document.getElementById('btnSoundToggle'),
+      btnImportSgfOpen: document.getElementById('btnImportSgfOpen'),
       btnExportSgf: document.getElementById('btnExportSgf'),
-      btnLaunchDojo: document.getElementById('btnLaunchDojo'),
+      sgfModal: document.getElementById('sgfModal'),
+      sgfInput: document.getElementById('sgfInput'),
+      btnSgfCancel: document.getElementById('btnSgfCancel'),
+      btnSgfLoad: document.getElementById('btnSgfLoad'),
+      modeNav: document.getElementById('modeNav'),
       sizeSelector: document.getElementById('sizeSelector'),
       rankSelector: document.getElementById('rankSelector'),
       replayBar: document.getElementById('replayBar'),
@@ -92,16 +99,18 @@ class SuijiApp {
       this.updateTerritory();
     });
 
-    this.learningUI = new LearningUI(this.learningEngine, this.boardRenderer, () => {
-      // Exiting Dojo -> return to regular game
-      this.inDojoMode = false;
-      this.game.reset();
-      this.updateUI();
-      this.showToast('Returned to normal game mode');
-    });
+    this.learningUI = new LearningUI(this.learningEngine, this.boardRenderer);
   }
 
   bindEvents() {
+    // Mode Switcher Navigation
+    this.els.modeNav.querySelectorAll('.mode-nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        this.switchMode(mode);
+      });
+    });
+
     // Board interaction
     this.els.board.addEventListener('mousemove', (e) => this.onMouseMove(e));
     this.els.board.addEventListener('mouseleave', () => {
@@ -116,13 +125,26 @@ class SuijiApp {
     this.els.btnResign.addEventListener('click', () => this.onResign());
     this.els.btnNew.addEventListener('click', () => this.onNewGame());
     this.els.btnUndo.addEventListener('click', () => this.onUndo());
-    this.els.btnExportSgf.addEventListener('click', () => this.onExportSgf());
 
-    // Dojo Launch
-    this.els.btnLaunchDojo.addEventListener('click', () => {
-      this.inDojoMode = true;
-      this.learningUI.open();
+    // Sound toggle
+    this.els.btnSoundToggle.addEventListener('click', () => {
+      const isMuted = this.sound.toggleMute();
+      this.els.btnSoundToggle.innerHTML = isMuted 
+        ? '<i class="fa-solid fa-volume-xmark"></i>' 
+        : '<i class="fa-solid fa-volume-high"></i>';
+      this.showToast(isMuted ? 'Sound muted' : 'Sound unmuted');
     });
+
+    // SGF Import / Export
+    this.els.btnExportSgf.addEventListener('click', () => this.onExportSgf());
+    this.els.btnImportSgfOpen.addEventListener('click', () => {
+      this.els.sgfModal.classList.add('show');
+      this.els.sgfInput.focus();
+    });
+    this.els.btnSgfCancel.addEventListener('click', () => {
+      this.els.sgfModal.classList.remove('show');
+    });
+    this.els.btnSgfLoad.addEventListener('click', () => this.onImportSgf());
 
     // Board Size Selector
     this.els.sizeSelector.querySelectorAll('.size-btn').forEach(btn => {
@@ -170,6 +192,42 @@ class SuijiApp {
     });
   }
 
+  switchMode(mode) {
+    if (this.currentMode === mode) return;
+    this.currentMode = mode;
+    this.els.body.setAttribute('data-app-mode', mode);
+
+    // Update nav buttons
+    this.els.modeNav.querySelectorAll('.mode-nav-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === mode);
+    });
+
+    if (mode === 'match') {
+      this.boardRenderer.setTutorialMarkers([]);
+      this.game.reset();
+      this.updateUI();
+      this.showToast('Switched to Match Play vs AI');
+    } else {
+      // In learning/puzzles/codex mode
+      let targetCat = 'rules';
+      if (mode === 'dojo') targetCat = 'rules';
+      else if (mode === 'puzzles') targetCat = 'puzzles';
+      else if (mode === 'codex') targetCat = 'shapes';
+
+      // Update cat buttons active state
+      const catBtns = document.querySelectorAll('.dojo-cat-btn');
+      catBtns.forEach(b => b.classList.toggle('active', b.dataset.cat === targetCat));
+
+      this.learningEngine.selectLesson(targetCat, 0);
+      this.learningUI.renderLessonsList();
+      this.learningUI.clearFeedback();
+      this.showToast(`Entered ${mode === 'puzzles' ? 'Tsumego Lab' : mode === 'codex' ? 'The Go Codex' : 'Learning Dojo'}`);
+    }
+
+    this.boardRenderer.resize();
+    this.heatmapRenderer.resize();
+  }
+
   changeBoardSize(size) {
     if (this.game.size === size) return;
     const komi = size === 19 ? 7.5 : 6.5;
@@ -188,15 +246,8 @@ class SuijiApp {
       this.els.coordHint.classList.remove('show');
       return;
     }
-    if (this.game.currentPlayer !== BLACK && !this.inDojoMode) {
-      this.boardRenderer.setHover(null);
-      return;
-    }
 
-    const rect = this.els.board.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-    const grid = this.boardRenderer.pixelToGrid(px, py);
+    const grid = this.boardRenderer.pixelToGrid(e.clientX, e.clientY);
     this.boardRenderer.setHover(grid);
 
     if (grid) {
@@ -211,31 +262,32 @@ class SuijiApp {
   }
 
   onTouchStart(e) {
-    e.preventDefault();
     if (this.aiThinking || this.reviewMode || this.game.gameOver) return;
     const touch = e.touches[0];
-    const rect = this.els.board.getBoundingClientRect();
-    const px = touch.clientX - rect.left;
-    const py = touch.clientY - rect.top;
-    const grid = this.boardRenderer.pixelToGrid(px, py);
-    if (grid) this.handleCoordinateAction(grid.x, grid.y);
+    if (!touch) return;
+    const grid = this.boardRenderer.pixelToGrid(touch.clientX, touch.clientY);
+    if (grid) {
+      e.preventDefault();
+      this.handleCoordinateAction(grid.x, grid.y);
+    }
   }
 
   onBoardClick(e) {
     if (this.aiThinking || this.reviewMode || this.game.gameOver) return;
-    const rect = this.els.board.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-    const grid = this.boardRenderer.pixelToGrid(px, py);
-    if (grid) this.handleCoordinateAction(grid.x, grid.y);
+    const grid = this.boardRenderer.pixelToGrid(e.clientX, e.clientY);
+    if (grid) {
+      this.handleCoordinateAction(grid.x, grid.y);
+    }
   }
 
   handleCoordinateAction(x, y) {
-    if (this.inDojoMode) {
+    // If in Learning / Puzzles / Codex Mode
+    if (this.currentMode !== 'match') {
       this.learningEngine.handleUserMove(x, y);
       return;
     }
 
+    // Match Mode: Player is Black
     if (this.game.currentPlayer !== BLACK) return;
 
     if (this.game.koPoint && this.game.koPoint[0] === x && this.game.koPoint[1] === y) {
@@ -252,14 +304,14 @@ class SuijiApp {
 
     this.boardRenderer.animateStoneDrop(x, y, BLACK);
     this.sound.playStoneClick(1.0);
-    if (res.captured.length > 0) {
+    if (res.captured && res.captured.length > 0) {
       setTimeout(() => this.sound.playCaptureSound(res.captured.length), 70);
     }
 
     this.updateUI();
     const coord = coordToName(x, y, this.game.size);
     const capInfo = res.captured.length > 0 ? ` · +${res.captured.length} capture${res.captured.length > 1 ? 's' : ''}` : '';
-    this.setIntent('Your Move', `You played ${coord}.`, `Black ${coord}${capInfo}`);
+    this.setIntent('Your Move', `You played at ${coord}.`, `Black ${coord}${capInfo}`);
 
     if (this.game.gameOver) {
       setTimeout(() => this.showGameOver(), 500);
@@ -269,7 +321,7 @@ class SuijiApp {
   }
 
   async triggerAiTurn() {
-    if (this.game.gameOver || this.game.currentPlayer !== WHITE || this.inDojoMode) return;
+    if (this.game.gameOver || this.game.currentPlayer !== WHITE || this.currentMode !== 'match') return;
 
     this.aiThinking = true;
     this.els.thinkingOverlay.classList.add('show');
@@ -288,9 +340,9 @@ class SuijiApp {
       this.els.thinkingSub.textContent = subs[subIdx];
     }, 850);
 
-    const thinkDuration = this.ai.level === 1 ? 550 + Math.random() * 400 :
-                          this.ai.level === 2 ? 850 + Math.random() * 600 :
-                          1200 + Math.random() * 800;
+    const thinkDuration = this.ai.level === 1 ? 500 + Math.random() * 300 :
+                          this.ai.level === 2 ? 750 + Math.random() * 500 :
+                          1000 + Math.random() * 600;
 
     await new Promise(r => setTimeout(r, thinkDuration));
 
@@ -300,7 +352,7 @@ class SuijiApp {
 
     const decision = this.ai.selectMove();
 
-    if (decision.pass) {
+    if (decision.pass || !decision.move) {
       this.game.pass();
       this.sound.playPassSound();
       this.setIntent('AI Passed', 'White found no advantageous move on the board.', 'White pass');
@@ -309,7 +361,7 @@ class SuijiApp {
       if (placeRes.valid) {
         this.boardRenderer.animateStoneDrop(decision.move.x, decision.move.y, WHITE);
         this.sound.playStoneClick(1.0);
-        if (placeRes.captured.length > 0) {
+        if (placeRes.captured && placeRes.captured.length > 0) {
           setTimeout(() => this.sound.playCaptureSound(placeRes.captured.length), 70);
         }
 
@@ -317,9 +369,14 @@ class SuijiApp {
         const capInfo = placeRes.captured.length > 0 ? ` · +${placeRes.captured.length} capture${placeRes.captured.length > 1 ? 's' : ''}` : '';
         this.setIntent(
           decision.intent.title || 'AI Move',
-          decision.intent.text || `White played ${coord}.`,
+          decision.intent.text || `White played at ${coord}.`,
           `White ${coord}${capInfo}`
         );
+      } else {
+        // Fallback pass if edge case occurs
+        this.game.pass();
+        this.sound.playPassSound();
+        this.setIntent('AI Passed', 'White yielded turn.', 'White pass');
       }
     }
 
@@ -331,7 +388,7 @@ class SuijiApp {
   }
 
   onPass() {
-    if (this.aiThinking || this.game.gameOver || this.reviewMode || this.inDojoMode) return;
+    if (this.aiThinking || this.game.gameOver || this.reviewMode || this.currentMode !== 'match') return;
     this.game.pass();
     this.sound.playPassSound();
     this.setIntent('Turn Passed', 'You yielded your turn to White.', 'Black pass');
@@ -345,7 +402,7 @@ class SuijiApp {
   }
 
   onResign() {
-    if (this.aiThinking || this.game.gameOver || this.reviewMode || this.inDojoMode) return;
+    if (this.aiThinking || this.game.gameOver || this.reviewMode || this.currentMode !== 'match') return;
     this.game.resign();
     this.setIntent('Resignation', 'You yielded the game.', 'Black resigned');
     this.updateUI();
@@ -353,8 +410,8 @@ class SuijiApp {
   }
 
   onUndo() {
-    if (this.aiThinking || this.reviewMode || this.inDojoMode) return;
-    // Undo both AI move and Player move to return turn to player
+    if (this.aiThinking || this.reviewMode || this.currentMode !== 'match') return;
+    // Undo both AI move and Player move to restore player's turn
     const undone1 = this.game.undo();
     const undone2 = this.game.undo();
 
@@ -378,6 +435,36 @@ class SuijiApp {
     a.click();
     URL.revokeObjectURL(url);
     this.showToast('Game exported as SGF file');
+  }
+
+  onImportSgf() {
+    const text = this.els.sgfInput.value.trim();
+    if (!text) {
+      this.showToast('Please paste valid SGF text');
+      return;
+    }
+
+    const parsed = SgfParser.importFromSgf(text);
+    if (!parsed || !parsed.moves) {
+      this.showToast('Could not parse SGF format');
+      return;
+    }
+
+    this.els.sgfModal.classList.remove('show');
+    this.els.sgfInput.value = '';
+
+    // Switch size and replay moves
+    this.changeBoardSize(parsed.size || 19);
+    for (const m of parsed.moves) {
+      if (m.type === 'move') {
+        this.game.place(m.x, m.y);
+      } else {
+        this.game.pass();
+      }
+    }
+
+    this.updateUI();
+    this.showToast(`Loaded SGF with ${parsed.moves.length} moves!`);
   }
 
   onNewGame() {
@@ -477,7 +564,7 @@ class SuijiApp {
         const coord = coordToName(record.x, record.y, this.game.size);
         this.els.replayInfo.querySelector('.move-num').textContent = `Move ${idx} • ${colorName} at ${coord}`;
 
-        if (record.captured.length > 0) {
+        if (record.captured && record.captured.length > 0) {
           reason = `Captured ${record.captured.length} stone${record.captured.length > 1 ? 's' : ''}`;
         }
       } else {
@@ -518,7 +605,7 @@ class SuijiApp {
     this.els.capturesBlack.textContent = this.game.captures[BLACK];
     this.els.capturesWhite.textContent = this.game.captures[WHITE];
 
-    const canAct = !this.aiThinking && !this.game.gameOver && !this.reviewMode && !this.inDojoMode;
+    const canAct = !this.aiThinking && !this.game.gameOver && !this.reviewMode && this.currentMode === 'match';
     this.els.btnPass.disabled = !canAct || this.game.currentPlayer !== BLACK;
     this.els.btnResign.disabled = !canAct;
 
@@ -548,7 +635,7 @@ class SuijiApp {
       const colorCls = m.color === BLACK ? 'black' : 'white';
       if (m.type === 'move') {
         const coord = coordToName(m.x, m.y, this.game.size);
-        const cap = m.captured.length > 0 ? `<span class="move-cap">×${m.captured.length}</span>` : '<span></span>';
+        const cap = m.captured && m.captured.length > 0 ? `<span class="move-cap">×${m.captured.length}</span>` : '<span></span>';
         return `
           <div class="move-row ${isCur}" data-index="${idx}">
             <span class="move-num">${idx + 1}</span>
@@ -613,7 +700,7 @@ class SuijiApp {
 
   startTimer() {
     setInterval(() => {
-      if (!this.game.startTime || this.game.gameOver) return;
+      if (!this.game.startTime || this.game.gameOver || this.currentMode !== 'match') return;
       const elapsed = Math.floor((Date.now() - this.game.startTime) / 1000);
       const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
       const s = (elapsed % 60).toString().padStart(2, '0');

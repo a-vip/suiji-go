@@ -15,20 +15,41 @@ export class GoAI {
   getCandidates(color = this.game.currentPlayer) {
     const candidates = [];
     const size = this.game.size;
+    const board = this.game.board;
+
+    // In 19x19 or 13x13 games with many moves, limit candidates to points adjacent or within 2 spaces of stones,
+    // plus empty Hoshi points in the opening, to keep evaluation ultra-fast.
+    const moveCount = this.game.history.length;
+    const isBigBoard = size >= 13;
 
     for (let x = 0; x < size; x++) {
       for (let y = 0; y < size; y++) {
-        if (this.game.board[x][y] !== EMPTY) continue;
+        if (board[x][y] !== EMPTY) continue;
         if (this.game.koPoint && this.game.koPoint[0] === x && this.game.koPoint[1] === y) continue;
 
-        // Check eye self-fill rule
-        const eyeInfo = GoRules.isEye(x, y, color, this.game.board, size);
+        // On larger boards, prune empty space far from any action to keep performance snappy
+        if (isBigBoard && moveCount > 4) {
+          let hasNearby = false;
+          const searchRad = 2;
+          for (let dx = -searchRad; dx <= searchRad && !hasNearby; dx++) {
+            for (let dy = -searchRad; dy <= searchRad && !hasNearby; dy++) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
+                if (board[nx][ny] !== EMPTY) hasNearby = true;
+              }
+            }
+          }
+          if (!hasNearby && moveCount > 10) continue;
+        }
+
+        // Avoid filling own true eye
+        const eyeInfo = GoRules.isEye(x, y, color, board, size);
         if (eyeInfo && eyeInfo.isEye && eyeInfo.isTrueEye) {
-          // Never fill own true eye unless it is the only move or in desperate self-atari
           continue;
         }
 
-        const sim = GoRules.tryPlace(x, y, color, this.game.board, size, this.game.koPoint);
+        const sim = GoRules.tryPlace(x, y, color, board, size, this.game.koPoint);
         if (sim.valid) {
           candidates.push({ x, y, ...sim });
         }
@@ -37,7 +58,7 @@ export class GoAI {
     return candidates;
   }
 
-  evaluateMove(candidate, color) {
+  evaluateMove(candidate, color, baseTerritory) {
     const opponent = color === BLACK ? WHITE : BLACK;
     const size = this.game.size;
     let score = 0;
@@ -47,11 +68,11 @@ export class GoAI {
     // 1. Immediate Captures
     const capturedCount = captured.length;
     if (capturedCount > 0) {
-      score += capturedCount * 36;
-      if (capturedCount > 1) score += capturedCount * 12; // Bonus for multi-capture
+      score += capturedCount * 40;
+      if (capturedCount > 1) score += capturedCount * 14;
     }
 
-    // 2. Saving stones in Atari
+    // 2. Saving friendly stones in Atari
     let savedCount = 0;
     for (const [nx, ny] of GoRules.getNeighbors(x, y, size)) {
       if (this.game.board[nx][ny] === color) {
@@ -62,7 +83,7 @@ export class GoAI {
       }
     }
     if (savedCount > 0) {
-      score += savedCount * 28;
+      score += savedCount * 30;
     }
 
     // 3. Putting opponent in Atari
@@ -76,24 +97,24 @@ export class GoAI {
       }
     }
     if (atariCount > 0) {
-      score += atariCount * 16;
+      score += atariCount * 18;
     }
 
     // 4. Liberties safety
     if (ownLiberties === 1) {
-      score -= 24; // Dangerous self-atari
+      score -= 28; // dangerous self-atari
     } else if (ownLiberties === 2) {
       score += 2;
     } else if (ownLiberties >= 3) {
       score += 6;
     }
 
-    // 5. Edge and line penalties/bonuses
+    // 5. Board edge geometry
     const distToEdge = Math.min(x, y, size - 1 - x, size - 1 - y);
     if (distToEdge === 0) {
-      score -= 8; // 1st line (death line in early/mid game)
-    } else if (distToEdge === 1 && this.game.history.length < 15) {
-      score -= 3; // 2nd line early on
+      score -= 10; // First line penalty early on
+    } else if (distToEdge === 1 && this.game.history.length < 16) {
+      score -= 2;
     } else if (distToEdge === 2 || distToEdge === 3) {
       score += 8; // 3rd line (territory) and 4th line (influence)
     }
@@ -117,33 +138,31 @@ export class GoAI {
     const isSide = distToEdge === 2 || distToEdge === 3;
     const isCenter = distToEdge >= 4;
 
-    if (moveNumber < (size === 9 ? 6 : size === 13 ? 12 : 24)) {
+    if (moveNumber < (size === 9 ? 6 : size === 13 ? 12 : 20)) {
       const hoshiList = HOSHI_POINTS[size] || [];
       for (const [hx, hy] of hoshiList) {
         if (Math.abs(x - hx) <= 1 && Math.abs(y - hy) <= 1) {
-          score += 15;
+          score += 16;
           break;
         }
       }
     }
 
-    // 8. Territory swings (for Dan levels)
+    // 8. Territory influence score (Fast approximation via local influence)
     let territorySwing = 0;
-    if (this.level >= 2) {
-      const before = GoRules.calculateTerritory(this.game.board, size, this.game.komi);
-      const after = GoRules.calculateTerritory(newBoard, size, this.game.komi);
-      const ownBefore = color === BLACK ? before.blackArea : before.whiteArea;
-      const ownAfter = color === BLACK ? after.blackArea : after.whiteArea;
-      const oppBefore = color === BLACK ? before.whiteArea : before.blackArea;
-      const oppAfter = color === BLACK ? after.whiteArea : after.blackArea;
-
-      const ownGain = ownAfter - ownBefore;
-      const oppLoss = oppBefore - oppAfter;
-      territorySwing = (ownGain + oppLoss);
-      score += territorySwing * 3.5;
+    if (baseTerritory && baseTerritory.influence) {
+      const localInf = baseTerritory.influence[x][y];
+      const sign = color === BLACK ? 1 : -1;
+      // If playing in opponent influence, invasion; if in neutral, expansion
+      if (localInf * sign < -0.3) {
+        score += 8; // Good invasion
+        territorySwing = 2.5;
+      } else if (Math.abs(localInf) < 0.25) {
+        score += 5; // Establishing new base
+      }
     }
 
-    // 9. High Dan Lookahead (Level 3)
+    // 9. High Dan Lookahead (Level 3): Check immediate counter-captures
     if (this.level === 3) {
       let maxOppCounterCapture = 0;
       for (const [nx, ny] of GoRules.getNeighbors(x, y, size)) {
@@ -154,11 +173,11 @@ export class GoAI {
           }
         }
       }
-      score -= maxOppCounterCapture * 30;
+      score -= maxOppCounterCapture * 28;
     }
 
-    // Noise by difficulty
-    const noiseMagnitude = this.level === 1 ? 22 : this.level === 2 ? 6 : 1.5;
+    // Natural variability by level
+    const noiseMagnitude = this.level === 1 ? 24 : this.level === 2 ? 6 : 1.5;
     score += (Math.random() - 0.5) * noiseMagnitude;
 
     // Build humanized description
@@ -187,17 +206,19 @@ export class GoAI {
       return { pass: true, intent: { title: 'Pass', text: 'No advantageous or legal points remain.', japanese: 'Pasu (パス)' } };
     }
 
-    const scored = candidates.map(c => this.evaluateMove(c, this.game.currentPlayer));
+    // Compute base territory ONCE for all candidates
+    const baseTerritory = this.game.calculateTerritory();
+    const scored = candidates.map(c => this.evaluateMove(c, this.game.currentPlayer, baseTerritory));
     scored.sort((a, b) => b.score - a.score);
 
-    // If top score is deeply negative, pass
-    if (scored[0].score < -45 && this.game.history.length > 20) {
-      return { pass: true, intent: { title: 'Pass', text: 'Board has solidified; passing turn.', japanese: 'Pasu (パス)' } };
+    // If top candidate is excessively negative and late in the game, AI gracefully passes
+    if (scored[0].score < -50 && this.game.history.length > 25) {
+      return { pass: true, intent: { title: 'Pass', text: 'Territory has solidified; AI yields turn.', japanese: 'Pasu (パス)' } };
     }
 
-    // Level 1 picks from top 5 for natural human variety
-    if (this.level === 1 && Math.random() < 0.45) {
-      const topN = Math.min(5, scored.length);
+    // Level 1 picks from top 5 for instructional play
+    if (this.level === 1 && Math.random() < 0.4) {
+      const topN = Math.min(4, scored.length);
       const choice = scored[Math.floor(Math.random() * topN)];
       return { move: { x: choice.x, y: choice.y }, intent: choice.intent };
     }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Suiji • Go Institute × AI Analysis & Learning Dojo</title>
+  <title>Suiji • Go Institute × AI Strategic Analysis & Learning Dojo</title>
   
   <!-- Web App Manifest for PWA / Mobile installation -->
   <link rel="manifest" href="./public/manifest.webmanifest">
@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="./src/styles/main.css">
   <link rel="stylesheet" href="./src/styles/learning.css">
 </head>
-<body>
+<body data-app-mode="match">
 
 <div class="app">
   
@@ -31,24 +31,40 @@
       <div class="seal">囲</div>
       <div>
         <h1>Suiji</h1>
-        <div class="tagline">Go Institute<span class="dot">·</span>AI Analysis<span class="dot">·</span>Learning Dojo</div>
+        <div class="tagline">Go Institute<span class="dot">·</span>AI Strategic Analysis<span class="dot">·</span>Learning Dojo</div>
       </div>
     </div>
+
+    <!-- App Navigation Mode Tabs -->
+    <nav class="mode-nav" id="modeNav">
+      <button class="mode-nav-btn active" data-mode="match">
+        <i class="fa-solid fa-gamepad"></i> Match Play
+      </button>
+      <button class="mode-nav-btn" data-mode="dojo">
+        <i class="fa-solid fa-graduation-cap"></i> Learning Dojo
+      </button>
+      <button class="mode-nav-btn" data-mode="puzzles">
+        <i class="fa-solid fa-puzzle-piece"></i> Tsumego Lab
+      </button>
+      <button class="mode-nav-btn" data-mode="codex">
+        <i class="fa-solid fa-book-open"></i> The Go Codex
+      </button>
+    </nav>
     
     <div class="header-actions">
-      <!-- Board Size Selector -->
-      <div class="size-selector" id="sizeSelector" title="Select Board Dimensions">
+      <!-- Board Size Selector (Match mode) -->
+      <div class="size-selector mode-match-view" id="sizeSelector" title="Select Board Dimensions">
         <button class="size-btn active" data-size="9">9×9</button>
         <button class="size-btn" data-size="13">13×13</button>
         <button class="size-btn" data-size="19">19×19</button>
       </div>
 
-      <!-- Rank Selector -->
-      <div class="rank-selector" id="rankSelector">
+      <!-- AI Rank Selector (Match mode) -->
+      <div class="rank-selector mode-match-view" id="rankSelector">
         <div class="rank-badge" data-level="1" title="Beginner AI: forgiving, instructional">
           <div class="medal">初</div>
           <div class="label">
-            <span class="name">Beginner Dan</span>
+            <span class="name">Beginner</span>
             <span class="meta">Kyu-level</span>
           </div>
         </div>
@@ -68,10 +84,17 @@
         </div>
       </div>
 
-      <!-- Learning Dojo Academy Button -->
-      <button class="dojo-launch-btn" id="btnLaunchDojo" title="Enter the Interactive Academy & Tactics Dojo">
-        <i class="fa-solid fa-graduation-cap"></i>
-        <span>Learning Dojo • 囲碁道場</span>
+      <!-- Audio Mute Button -->
+      <button class="icon-btn" id="btnSoundToggle" title="Toggle Sound">
+        <i class="fa-solid fa-volume-high"></i>
+      </button>
+
+      <!-- SGF Tools -->
+      <button class="icon-btn mode-match-view" id="btnImportSgfOpen" title="Import SGF Game Record">
+        <i class="fa-solid fa-file-import"></i>
+      </button>
+      <button class="icon-btn mode-match-view" id="btnExportSgf" title="Export SGF Game Record">
+        <i class="fa-solid fa-file-export"></i>
       </button>
     </div>
   </header>
@@ -81,43 +104,81 @@
     
     <!-- LEFT PANEL -->
     <aside class="left-col">
-      <div class="panel">
-        <h3 class="panel-title">Game Information</h3>
-        <div class="info-row">
-          <span class="label">Board Size</span>
-          <span class="value mono" id="infoBoardSize">9 × 9</span>
-        </div>
-        <div class="info-row">
-          <span class="label">Komi</span>
-          <span class="value mono" id="infoKomi">6.5</span>
-        </div>
-        <div class="info-row">
-          <span class="label">Ruleset</span>
-          <span class="value">Area Scoring</span>
-        </div>
-        <div class="info-row">
-          <span class="label">Moves</span>
-          <span class="value mono" id="moveCounter">0</span>
-        </div>
-        <div class="info-row">
-          <span class="label">Time</span>
-          <span class="value mono" id="gameTime">00:00</span>
+      <!-- MATCH PLAY: Game Information & Move Record -->
+      <div class="mode-match-view">
+        <div class="panel">
+          <h3 class="panel-title">Match Information</h3>
+          <div class="info-row">
+            <span class="label">Board Size</span>
+            <span class="value mono" id="infoBoardSize">9 × 9</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Komi</span>
+            <span class="value mono" id="infoKomi">6.5</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Ruleset</span>
+            <span class="value">Area Scoring (Chinese)</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Moves</span>
+            <span class="value mono" id="moveCounter">0</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Time</span>
+            <span class="value mono" id="gameTime">00:00</span>
+          </div>
+          
+          <div style="margin-top: 14px; display: flex; gap: 6px;">
+            <button class="btn" id="btnUndo" style="flex: 1;" title="Undo Move">
+              <i class="fa-solid fa-arrow-rotate-left"></i> Undo
+            </button>
+            <button class="btn primary" id="btnNew" style="flex: 1;" title="Start New Game">
+              <i class="fa-solid fa-rotate"></i> New
+            </button>
+          </div>
         </div>
         
-        <div style="margin-top: 14px; display: flex; gap: 6px;">
-          <button class="btn" id="btnUndo" style="flex: 1;" title="Undo Move">
-            <i class="fa-solid fa-arrow-rotate-left"></i> Undo
-          </button>
-          <button class="btn" id="btnExportSgf" style="flex: 1;" title="Export game as SGF">
-            <i class="fa-solid fa-download"></i> SGF
-          </button>
+        <div class="panel">
+          <h3 class="panel-title">Move Record</h3>
+          <div class="move-list" id="moveList">
+            <div class="move-empty">The board awaits the first stone.</div>
+          </div>
         </div>
       </div>
-      
-      <div class="panel">
-        <h3 class="panel-title">Move Record</h3>
-        <div class="move-list" id="moveList">
-          <div class="move-empty">The board awaits the first stone.</div>
+
+      <!-- LEARNING DOJO / ACADEMY: Curriculum Navigator -->
+      <div class="mode-dojo-view">
+        <div class="panel dojo-nav-panel">
+          <h3 class="panel-title">
+            Academy Curriculum
+            <span class="panel-sub" id="dojoProgressCount">0 / 0 Mastered</span>
+          </h3>
+
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="dojoProgressBar"></div>
+          </div>
+
+          <div class="dojo-category-select">
+            <button class="dojo-cat-btn active" data-cat="rules">
+              <span><i class="fa-solid fa-scroll"></i> 1. Rules & Basics</span>
+              <span class="badge-count">0/6</span>
+            </button>
+            <button class="dojo-cat-btn" data-cat="tactics">
+              <span><i class="fa-solid fa-khanda"></i> 2. Named Moves & Tactics</span>
+              <span class="badge-count">0/6</span>
+            </button>
+            <button class="dojo-cat-btn" data-cat="shapes">
+              <span><i class="fa-solid fa-shapes"></i> 3. Essential Shapes</span>
+              <span class="badge-count">0/4</span>
+            </button>
+            <button class="dojo-cat-btn" data-cat="puzzles">
+              <span><i class="fa-solid fa-puzzle-piece"></i> 4. Tsumego Puzzles</span>
+              <span class="badge-count">0/5</span>
+            </button>
+          </div>
+
+          <div class="dojo-lessons-list" id="dojoLessonsList"></div>
         </div>
       </div>
     </aside>
@@ -138,15 +199,12 @@
               <span class="captures" id="capturesWhite">0</span>
             </div>
           </div>
-          <div class="board-controls">
+          <div class="board-controls mode-match-view">
             <button class="btn" id="btnPass" title="Pass turn">
               <i class="fa-solid fa-forward"></i> Pass
             </button>
             <button class="btn" id="btnResign" title="Resign">
               <i class="fa-solid fa-flag"></i> Resign
-            </button>
-            <button class="btn primary" id="btnNew" title="New game">
-              <i class="fa-solid fa-rotate"></i> New
             </button>
           </div>
         </div>
@@ -174,50 +232,89 @@
     
     <!-- RIGHT PANEL -->
     <aside class="right-col">
-      <div class="panel">
-        <h3 class="panel-title">
-          Territory Estimate
-          <span class="panel-sub live">Live</span>
-        </h3>
-        <div class="heatmap-wrap">
-          <canvas id="heatmap" width="240" height="240"></canvas>
-        </div>
-        <div class="heatmap-legend">
-          <div class="leg"><span class="swatch b"></span>Black</div>
-          <div class="leg">Neutral</div>
-          <div class="leg">White<span class="swatch w"></span></div>
-        </div>
-        <div class="score-section">
-          <div class="score-bar">
-            <div class="black-fill" id="blackBar" style="width: 50%"></div>
-            <div class="white-fill" id="whiteBar" style="width: 50%"></div>
+      <!-- MATCH PLAY: Territory Estimate & AI Intent -->
+      <div class="mode-match-view">
+        <div class="panel">
+          <h3 class="panel-title">
+            Territory Estimate
+            <span class="panel-sub live">Live</span>
+          </h3>
+          <div class="heatmap-wrap">
+            <canvas id="heatmap" width="240" height="240"></canvas>
           </div>
-          <div class="score-labels">
-            <div class="label-side">
-              <div class="stone-mini b"></div>
-              <span>Black</span>
-              <span class="value" id="blackScore">0</span>
+          <div class="heatmap-legend">
+            <div class="leg"><span class="swatch b"></span>Black</div>
+            <div class="leg">Neutral</div>
+            <div class="leg">White<span class="swatch w"></span></div>
+          </div>
+          <div class="score-section">
+            <div class="score-bar">
+              <div class="black-fill" id="blackBar" style="width: 50%"></div>
+              <div class="white-fill" id="whiteBar" style="width: 50%"></div>
             </div>
-            <div class="label-side">
-              <span class="value" id="whiteScore">6.5</span>
-              <span>White</span>
-              <div class="stone-mini w"></div>
+            <div class="score-labels">
+              <div class="label-side">
+                <div class="stone-mini b"></div>
+                <span>Black</span>
+                <span class="value" id="blackScore">0</span>
+              </div>
+              <div class="label-side">
+                <span class="value" id="whiteScore">6.5</span>
+                <span>White</span>
+                <div class="stone-mini w"></div>
+              </div>
+            </div>
+            <div class="score-margin" id="scoreMargin">Even position</div>
+          </div>
+        </div>
+        
+        <div class="panel">
+          <h3 class="panel-title">
+            AI Intent & Strategy
+            <span class="panel-sub" id="intentMove">Move 0</span>
+          </h3>
+          <div class="intent-panel">
+            <div class="intent-label" id="intentLabel">Tactical Interpretation</div>
+            <div class="intent-text" id="intentText">Black plays first — the board begins empty.</div>
+            <div class="intent-meta" id="intentMeta">
+              <span>Awaiting opening</span>
             </div>
           </div>
-          <div class="score-margin" id="scoreMargin">Even position</div>
         </div>
       </div>
-      
-      <div class="panel">
-        <h3 class="panel-title">
-          AI Intent & Strategy
-          <span class="panel-sub" id="intentMove">Move 0</span>
-        </h3>
-        <div class="intent-panel">
-          <div class="intent-label" id="intentLabel">Tactical Interpretation</div>
-          <div class="intent-text" id="intentText">Black plays first — the board begins empty.</div>
-          <div class="intent-meta" id="intentMeta">
-            <span>Awaiting opening</span>
+
+      <!-- LEARNING DOJO / ACADEMY: Interactive Scenario Stage -->
+      <div class="mode-dojo-view">
+        <div class="panel scenario-stage-panel">
+          <div class="scenario-badge" id="scenBadge">Fundamentals of Go</div>
+          <h3 class="scenario-title" id="scenTitle">Lesson Title</h3>
+          <p class="scenario-subtitle" id="scenSub">Lesson Subtitle</p>
+
+          <div class="scenario-description" id="scenDesc">Description of this concept...</div>
+
+          <div class="scenario-objective">
+            <i class="fa-solid fa-crosshairs"></i>
+            <div class="scenario-objective-text" id="scenObjective">Click the targeted intersection...</div>
+          </div>
+
+          <div class="scenario-feedback" id="scenFeedback"></div>
+
+          <div class="scenario-actions">
+            <button class="btn" id="btnScenHint" title="Reveal strategic hint">
+              <i class="fa-solid fa-lightbulb"></i> Show Hint
+            </button>
+            <button class="btn" id="btnScenReset" title="Restart scenario">
+              <i class="fa-solid fa-rotate-left"></i> Reset
+            </button>
+          </div>
+
+          <div class="scenario-nav-group">
+            <button class="btn" id="btnScenPrev">
+              <i class="fa-solid fa-arrow-left"></i> Previous
+            </button>
+            <button class="btn primary" id="btnScenNext">
+              Next Lesson <i class="fa-solid fa-arrow-right"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -261,6 +358,19 @@
     <div style="display: flex; gap: 10px; justify-content: center;">
       <button class="btn" id="goReview"><i class="fa-solid fa-list"></i> Review Moves</button>
       <button class="btn primary" id="goNew"><i class="fa-solid fa-rotate"></i> New Game</button>
+    </div>
+  </div>
+</div>
+
+<!-- SGF Import Modal -->
+<div class="sgf-modal" id="sgfModal">
+  <div class="sgf-box">
+    <h3 style="margin-top: 0; font-family: 'Cormorant Garamond', serif; font-size: 22px;">Import SGF Game</h3>
+    <p style="font-size: 12px; color: var(--ink-light); margin-bottom: 8px;">Paste SGF file contents below to load the board position or game record:</p>
+    <textarea id="sgfInput" placeholder="(;GM[1]SZ[9]KM[6.5]...)"></textarea>
+    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+      <button class="btn" id="btnSgfCancel">Cancel</button>
+      <button class="btn primary" id="btnSgfLoad">Load SGF</button>
     </div>
   </div>
 </div>

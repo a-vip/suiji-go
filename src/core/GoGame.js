@@ -166,9 +166,10 @@ export class GoGame {
   /**
    * Set a custom board layout (used for tutorials & tsumego)
    */
-  setupCustomBoard(stones = [], size = this.size) {
+  setupCustomBoard(stones = [], size = this.size, toPlay = BLACK) {
     this.size = size;
     this.reset(size);
+    this.currentPlayer = toPlay;
     for (const item of stones) {
       const { x, y, color } = item;
       if (x >= 0 && x < size && y >= 0 && y < size) {

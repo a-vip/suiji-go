@@ -1,5 +1,6 @@
 import { RULES_LESSONS } from './curriculum/rulesLessons.js';
 import { TACTICS_LESSONS } from './curriculum/tacticsLessons.js';
+import { SHAPES_LESSONS } from './curriculum/shapesLessons.js';
 import { PRACTICE_PUZZLES } from './curriculum/practicePuzzles.js';
 import { BLACK, WHITE } from '../core/Constants.js';
 
@@ -10,15 +11,17 @@ export class LearningEngine {
     this.onStateChange = onStateChange;
 
     this.categories = {
-      rules: RULES_LESSONS,
-      tactics: TACTICS_LESSONS,
-      puzzles: PRACTICE_PUZZLES
+      rules: { title: '1. Rules & Basics', lessons: RULES_LESSONS },
+      tactics: { title: '2. Named Moves & Tactics', lessons: TACTICS_LESSONS },
+      shapes: { title: '3. Essential Shapes (Codex)', lessons: SHAPES_LESSONS },
+      puzzles: { title: '4. Tsumego Challenges', lessons: PRACTICE_PUZZLES }
     };
 
     this.activeCategory = 'rules';
     this.activeLessonIndex = 0;
     this.currentLesson = null;
-    this.lessonPhase = 0; // 0 = initial move, 1 = follow-up move (if applicable)
+    this.lessonPhase = 0;
+    this.hintRevealed = false;
     this.completedLessons = this.loadCompleted();
   }
 
@@ -38,13 +41,14 @@ export class LearningEngine {
   }
 
   getLessons(category = this.activeCategory) {
-    return this.categories[category] || [];
+    return this.categories[category] ? this.categories[category].lessons : [];
   }
 
   selectLesson(category, index) {
     this.activeCategory = category;
     this.activeLessonIndex = index;
     this.lessonPhase = 0;
+    this.hintRevealed = false;
 
     const list = this.getLessons(category);
     this.currentLesson = list[index] || null;
@@ -58,9 +62,8 @@ export class LearningEngine {
     if (!this.currentLesson) return;
     const lesson = this.currentLesson;
 
-    // Setup board
-    this.game.setupCustomBoard(lesson.initialStones, lesson.boardSize || 9);
-    this.game.currentPlayer = lesson.playerColor || BLACK;
+    // Setup board layout
+    this.game.setupCustomBoard(lesson.initialStones, lesson.boardSize || 9, lesson.playerColor || BLACK);
 
     this.notifyState({
       status: 'ready',
@@ -76,16 +79,22 @@ export class LearningEngine {
     const targetMove = this.lessonPhase === 0 ? lesson.expectedMove : lesson.followUpMove;
 
     if (x === targetMove.x && y === targetMove.y) {
-      // Correct move
+      // Correct Move!
       const placeRes = this.game.place(x, y);
       this.soundEngine.playStoneClick(1.2);
       if (placeRes.captured && placeRes.captured.length > 0) {
         this.soundEngine.playCaptureSound(placeRes.captured.length);
       }
 
-      // Check if there is a follow-up phase (e.g. AI plays an escaping move)
+      // Check if there is an AI follow-up response in the scenario
       if (this.lessonPhase === 0 && lesson.aiResponse && lesson.followUpMove) {
         this.lessonPhase = 1;
+
+        this.notifyState({
+          status: 'ai-replying',
+          message: 'White is countering...',
+          markers: []
+        });
 
         setTimeout(() => {
           this.game.place(lesson.aiResponse.x, lesson.aiResponse.y);
@@ -94,14 +103,16 @@ export class LearningEngine {
           this.notifyState({
             status: 'follow-up',
             message: lesson.followUpInstruction,
-            markers: [{ type: 'target', x: lesson.followUpMove.x, y: lesson.followUpMove.y, label: 'Block' }]
+            markers: [
+              { type: 'target', x: lesson.followUpMove.x, y: lesson.followUpMove.y, label: 'Trap' }
+            ]
           });
-        }, 500);
+        }, 550);
 
         return { handled: true, correct: true, phase: 1 };
       }
 
-      // Completed scenario!
+      // Scenario completed!
       this.completedLessons.add(lesson.id);
       this.saveCompleted();
       this.soundEngine.playSuccessChime();
@@ -115,12 +126,34 @@ export class LearningEngine {
       return { handled: true, correct: true, completed: true };
     } else {
       // Incorrect attempt
+      this.soundEngine.playPassSound();
       this.notifyState({
         status: 'incorrect',
-        message: `Not quite! Aim for the targeted intersection to execute the technique. Try again!`,
+        message: `Not quite! Aim for the strategic point to execute the technique. Try again!`,
         markers: lesson.markers || []
       });
       return { handled: true, correct: false };
+    }
+  }
+
+  showHint() {
+    if (!this.currentLesson) return;
+    this.hintRevealed = true;
+    const lesson = this.currentLesson;
+    const target = this.lessonPhase === 0 ? lesson.expectedMove : lesson.followUpMove;
+
+    this.notifyState({
+      status: 'hint',
+      message: `💡 Hint: Play at [${target.x}, ${target.y}] to execute the move!`,
+      markers: [
+        { type: 'target', x: target.x, y: target.y, label: 'Play Here', color: '#b8860b' }
+      ]
+    });
+  }
+
+  prevLesson() {
+    if (this.activeLessonIndex > 0) {
+      this.selectLesson(this.activeCategory, this.activeLessonIndex - 1);
     }
   }
 
@@ -129,17 +162,18 @@ export class LearningEngine {
     if (this.activeLessonIndex < list.length - 1) {
       this.selectLesson(this.activeCategory, this.activeLessonIndex + 1);
     } else {
-      // Switch category if at end
-      if (this.activeCategory === 'rules') {
-        this.selectLesson('tactics', 0);
-      } else if (this.activeCategory === 'tactics') {
-        this.selectLesson('puzzles', 0);
+      // Advance to next category
+      const catKeys = Object.keys(this.categories);
+      const curCatIdx = catKeys.indexOf(this.activeCategory);
+      if (curCatIdx < catKeys.length - 1) {
+        this.selectLesson(catKeys[curCatIdx + 1], 0);
       }
     }
   }
 
   restartLesson() {
     this.lessonPhase = 0;
+    this.hintRevealed = false;
     this.loadCurrentLesson();
   }
 
@@ -147,6 +181,7 @@ export class LearningEngine {
     if (this.onStateChange) {
       this.onStateChange({
         category: this.activeCategory,
+        categories: this.categories,
         lesson: this.currentLesson,
         lessonIndex: this.activeLessonIndex,
         totalLessons: this.getLessons().length,

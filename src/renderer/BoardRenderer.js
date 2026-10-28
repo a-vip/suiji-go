@@ -10,7 +10,8 @@ export class BoardRenderer {
     this.animatingStones = new Map();
     this.woodTexture = null;
     this.dpr = window.devicePixelRatio || 1;
-    this.tutorialMarkers = []; // Highlights, arrows, target circles for tutorials
+    this.tutorialMarkers = [];
+    this.deadStones = new Set(); // For end of game scoring review
 
     this.setupCanvas();
     this.generateWoodTexture();
@@ -22,7 +23,7 @@ export class BoardRenderer {
   setupCanvas() {
     this.dpr = window.devicePixelRatio || 1;
     const rect = this.canvas.getBoundingClientRect();
-    const size = Math.max(rect.width || 560, 320);
+    const size = Math.max(rect.width || 580, 320);
 
     this.canvas.width = size * this.dpr;
     this.canvas.height = size * this.dpr;
@@ -44,6 +45,10 @@ export class BoardRenderer {
     this.tutorialMarkers = markers;
   }
 
+  setDeadStones(stones = []) {
+    this.deadStones = new Set(stones.map(s => `${s.x},${s.y}`));
+  }
+
   generateWoodTexture() {
     const w = this.displayWidth;
     const h = this.displayHeight;
@@ -63,7 +68,7 @@ export class BoardRenderer {
     ctx.fillRect(0, 0, w, h);
 
     // Fine wood grain fibers
-    const grainCount = 110;
+    const grainCount = 120;
     for (let i = 0; i < grainCount; i++) {
       const opacity = 0.035 + Math.random() * 0.12;
       ctx.strokeStyle = `rgba(${100 + Math.random() * 45}, ${55 + Math.random() * 30}, ${15 + Math.random() * 15}, ${opacity})`;
@@ -172,8 +177,8 @@ export class BoardRenderer {
       ctx.fill();
     }
 
-    // Coordinates
-    ctx.fillStyle = 'rgba(65, 42, 20, 0.55)';
+    // Coordinates (Numbers on left & right, Letters on top & bottom)
+    ctx.fillStyle = 'rgba(65, 42, 20, 0.6)';
     const fontSize = Math.max(9, Math.min(13, this.cellSize * 0.28));
     ctx.font = `600 ${fontSize}px "Spline Sans", system-ui, sans-serif`;
     ctx.textAlign = 'center';
@@ -200,11 +205,14 @@ export class BoardRenderer {
     const py = this.padding + y * this.cellSize;
     const r = Math.max(1, this.stoneRadius * scale);
 
+    const isDead = this.deadStones.has(`${x},${y}`);
+    const actualOpacity = isDead ? opacity * 0.45 : opacity;
+
     ctx.save();
-    ctx.globalAlpha = opacity;
+    ctx.globalAlpha = actualOpacity;
 
     // Contact drop shadow
-    ctx.fillStyle = `rgba(30, 16, 5, ${0.4 * opacity})`;
+    ctx.fillStyle = `rgba(30, 16, 5, ${0.4 * actualOpacity})`;
     ctx.beginPath();
     ctx.ellipse(px + 1.6, py + 3.2, r * 1.05, r * 0.95, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -258,6 +266,19 @@ export class BoardRenderer {
       ctx.fill();
     }
 
+    if (isDead) {
+      // Draw red 'X' on dead stones
+      ctx.strokeStyle = '#c62828';
+      ctx.lineWidth = 2.4;
+      const xSize = r * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(px - xSize, py - xSize);
+      ctx.lineTo(px + xSize, py + xSize);
+      ctx.moveTo(px + xSize, py - xSize);
+      ctx.lineTo(px - xSize, py + xSize);
+      ctx.stroke();
+    }
+
     ctx.restore();
   }
 
@@ -306,18 +327,26 @@ export class BoardRenderer {
         // Glowing target ring
         const pulse = (Math.sin(this.lastMovePulse * 0.08) + 1) / 2;
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2.8;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
-        ctx.arc(px, py, this.stoneRadius * 1.1 + pulse * 3, 0, Math.PI * 2);
+        ctx.arc(px, py, this.stoneRadius * 1.15 + pulse * 3, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
 
         // Bullseye center dot
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+        ctx.arc(px, py, 4, 0, Math.PI * 2);
         ctx.fill();
+
+        // Label if present
+        if (label) {
+          ctx.fillStyle = '#1f1410';
+          ctx.font = 'bold 11px "Spline Sans", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(label, px, py - this.stoneRadius * 1.4);
+        }
       } else if (type === 'highlight') {
         // Soft aura highlight
         ctx.fillStyle = color;
@@ -356,11 +385,11 @@ export class BoardRenderer {
     }
     const t = elapsed / dur;
     if (t < 0.4) {
-      return 0.3 + (t / 0.4) * 0.85; // 0.3 -> 1.15
+      return 0.3 + (t / 0.4) * 0.85;
     } else if (t < 0.7) {
-      return 1.15 - ((t - 0.4) / 0.3) * 0.2; // 1.15 -> 0.95
+      return 1.15 - ((t - 0.4) / 0.3) * 0.2;
     } else {
-      return 0.95 + ((t - 0.7) / 0.3) * 0.05; // 0.95 -> 1.0
+      return 0.95 + ((t - 0.7) / 0.3) * 0.05;
     }
   }
 
@@ -368,7 +397,17 @@ export class BoardRenderer {
     this.animatingStones.set(`${x},${y}`, { startTime: performance.now(), color });
   }
 
-  pixelToGrid(px, py) {
+  pixelToGrid(clientX, clientY) {
+    const rect = this.canvas.getBoundingClientRect();
+    if (!rect || rect.width === 0 || rect.height === 0) return null;
+
+    // Convert client coordinates to internal canvas display coordinates
+    const scaleX = this.displayWidth / rect.width;
+    const scaleY = this.displayHeight / rect.height;
+
+    const px = (clientX - rect.left) * scaleX;
+    const py = (clientY - rect.top) * scaleY;
+
     const x = Math.round((px - this.padding) / this.cellSize);
     const y = Math.round((py - this.padding) / this.cellSize);
     if (x < 0 || x >= this.game.size || y < 0 || y >= this.game.size) return null;
@@ -376,7 +415,7 @@ export class BoardRenderer {
     const gx = this.padding + x * this.cellSize;
     const gy = this.padding + y * this.cellSize;
     const dist = Math.hypot(px - gx, py - gy);
-    if (dist > this.cellSize * 0.52) return null;
+    if (dist > this.cellSize * 0.54) return null;
 
     return { x, y };
   }

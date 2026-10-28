@@ -65,7 +65,7 @@ export class GoRules {
 
   /**
    * Evaluates simulated move without mutating original board.
-   * Returns { valid, reason, newBoard, captured, ownLiberties }
+   * Returns { valid, reason, newBoard, captured, ownLiberties, ownGroup }
    */
   static tryPlace(x, y, color, board, size, koPoint = null) {
     if (x < 0 || x >= size || y < 0 || y >= size) {
@@ -153,26 +153,28 @@ export class GoRules {
 
   /**
    * Calculate territory, influence field, stone counts, and Komi-adjusted scores.
+   * Optimized with bounded radii to run smoothly on 9x9, 13x13, and 19x19 boards.
    */
   static calculateTerritory(board, size, komi = 6.5) {
     const influence = Array(size).fill(0).map(() => Array(size).fill(0));
-    const decay = 0.45;
-    const maxRadius = size <= 9 ? 4 : size <= 13 ? 5 : 6;
+    const decay = 0.44;
+    const maxRadius = size <= 9 ? 3 : size <= 13 ? 4 : 4;
 
     for (let x = 0; x < size; x++) {
       for (let y = 0; y < size; y++) {
         const stone = board[x][y];
         if (stone !== EMPTY) {
           const sign = stone === BLACK ? 1 : -1;
-          for (let dx = -maxRadius; dx <= maxRadius; dx++) {
-            for (let dy = -maxRadius; dy <= maxRadius; dy++) {
-              const nx = x + dx;
-              const ny = y + dy;
-              if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
-                const dist = Math.abs(dx) + Math.abs(dy);
-                if (dist > 0 && dist <= maxRadius) {
-                  influence[nx][ny] += sign * Math.pow(decay, dist);
-                }
+          const minDx = Math.max(-maxRadius, -x);
+          const maxDx = Math.min(maxRadius, size - 1 - x);
+          const minDy = Math.max(-maxRadius, -y);
+          const maxDy = Math.min(maxRadius, size - 1 - y);
+
+          for (let dx = minDx; dx <= maxDx; dx++) {
+            for (let dy = minDy; dy <= maxDy; dy++) {
+              const dist = Math.abs(dx) + Math.abs(dy);
+              if (dist > 0 && dist <= maxRadius) {
+                influence[x + dx][y + dy] += sign * Math.pow(decay, dist);
               }
             }
           }

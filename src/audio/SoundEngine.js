@@ -1,7 +1,16 @@
 export class SoundEngine {
   constructor() {
     this.ctx = null;
-    this.enabled = true;
+    this.muted = false;
+  }
+
+  toggleMute() {
+    this.muted = !this.muted;
+    return this.muted;
+  }
+
+  isMuted() {
+    return this.muted;
   }
 
   getContext() {
@@ -18,13 +27,13 @@ export class SoundEngine {
   }
 
   playStoneClick(intensity = 1) {
-    if (!this.enabled) return;
+    if (this.muted) return;
     const ctx = this.getContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
 
-    // 1. Noise transient (the percussive "clack" of stone striking Kaya wood)
+    // 1. Noise transient (the crisp "clack" of slate/shell striking Kaya wood)
     const bufSize = Math.floor(ctx.sampleRate * 0.07);
     const buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
     const channelData = buffer.getChannelData(0);
@@ -68,7 +77,7 @@ export class SoundEngine {
   }
 
   playCaptureSound(count = 1) {
-    if (!this.enabled) return;
+    if (this.muted) return;
     const clicks = Math.min(count, 5);
     for (let i = 0; i < clicks; i++) {
       setTimeout(() => {
@@ -78,7 +87,7 @@ export class SoundEngine {
   }
 
   playPassSound() {
-    if (!this.enabled) return;
+    if (this.muted) return;
     const ctx = this.getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -99,7 +108,7 @@ export class SoundEngine {
   }
 
   playSuccessChime() {
-    if (!this.enabled) return;
+    if (this.muted) return;
     const ctx = this.getContext();
     if (!ctx) return;
 
